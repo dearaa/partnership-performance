@@ -1,0 +1,293 @@
+SELECT
+	ord.*,
+	CASE
+		WHEN op.payment_method1 = "BTF"
+		THEN "Bank Transfer"
+		WHEN op.payment_method1 = "CCP"
+		THEN "Credit Card Payment"
+		WHEN op.payment_method1 = "CVS"
+		THEN "Convenient Store"
+		WHEN op.payment_method1 = "DPL"
+		THEN "Deeplink Payment"
+		WHEN op.payment_method1 = "IST"
+		THEN "Installment"
+		WHEN op.payment_method1 = "MUL"
+		THEN "Multi-finance Payment"
+		WHEN op.payment_method1 = 'IOU'
+		THEN 'Enterprise Credit (Payment Method B2B)'
+		WHEN op.payment_method1 = "INT"
+		THEN "Instant Payment"
+		WHEN op.payment_method1 = "EWT"
+		THEN "Ewallet"
+		WHEN op.payment_method1 = "PPT"
+		THEN "Promotion"
+		ELSE op.payment_method1
+	END AS payment_method1,
+	payment_method2,
+	payment_method3,
+	usr.User_flag
+FROM
+	(
+		SELECT
+			prm.application_name,
+			application_time,
+			participation_time,
+			rec.order_id Parent_ord_id,
+			odt.ord_id child_ord_id,
+			rec.pay_method,
+			rec.payment_status,
+		--	prm.bank_name,
+			odt.ord_state,
+			odt.book_dt,
+			ord_compl_tm,
+			odt.user_pin,
+			cat_lvl1_name_en,
+			cat_lvl2_name_en,
+			cat_lvl3_name_en,
+			SUM(after_prefr_amt) amount_oper,
+			SUM(order_amount) order_amount_boss
+		--	SUM(activity_amount) activity_amount_boss
+		FROM
+			(
+				SELECT
+					id AS application_number,
+					promotion_name AS application_name,
+					created_date AS application_time,
+					begin_date AS start_time,
+					v_end_date AS end_time,
+					CASE
+						WHEN promotion_type = '1'
+						THEN 'member'
+						WHEN promotion_type = '2'
+						THEN 'payment_method'
+						WHEN promotion_type = '3'
+						THEN 'order_amount'
+						WHEN promotion_type = '4'
+						THEN 'sku'
+						WHEN promotion_type = '5'
+						THEN 'category'
+						WHEN promotion_type = '99'
+						THEN 'integrated_rules'
+						ELSE promotion_type
+					END AS activity_type,
+					CASE
+						WHEN promotion_state = '1'
+						THEN 'active'
+						WHEN promotion_state = '2'
+						THEN 'pending-start'
+						WHEN promotion_state = '3'
+						THEN 'closed'
+						WHEN promotion_state = '4'
+						THEN 'new'
+						WHEN promotion_state = '5'
+						THEN 'inactive'
+						WHEN promotion_state = '6'
+						THEN 'edit'
+						ELSE promotion_state
+					END AS activity_status,
+					CASE
+						WHEN worker_order_state = '0'
+						THEN 'edit'
+						WHEN worker_order_state = '1'
+						THEN 'new'
+						WHEN worker_order_state = '2'
+						THEN 'approval'
+						WHEN worker_order_state = '3'
+						THEN 'passed'
+						WHEN worker_order_state = '4'
+						THEN 'rejected'
+						ELSE worker_order_state
+					END AS application_status,
+					priority AS activity_priority,
+					budget AS activity_amount,
+					sponsor AS applicant,
+					bank_name
+				FROM
+					fdm.fdm_inapay_promotion_inapay_promotion_base_chain
+				WHERE
+					id = '5840'
+					--AND created_date between '07-05-2022' AND '11-05-2022'
+					--promotion_name IN('BNI JDID Credit Card - 5.5 Lifestyle Sale', 'BRI Debit Card - 5.5 Lifestyle Sale', 'Citi Credit Card - 5.5 Lifestyle Sale', 'digibank Credit Card - 5.5 Lifestyle Sale', 'GoPay - 5.5 Lifestyle Sale', 'Mandiri Credit Card - 5.5 Lifestyle Sale', 'OVO - 5.5 Lifestyle Sale', 'TMRW Credit Card - 5.5 Lifestyle Sale')
+					AND dp = 'ACTIVE'
+			)
+			prm
+		LEFT JOIN
+			(
+				SELECT
+					promotion_id,
+					pin,
+					order_id,
+					order_amount,
+					money AS promotion_payment_amount,
+					CASE
+						WHEN record_state = '1'
+						THEN 'pre_consumtion'
+						WHEN record_state = '2'
+						THEN 'completed'
+						WHEN record_state = '3'
+						THEN 'failed'
+						WHEN record_state = '4'
+						THEN 'refund'
+						ELSE record_state
+					END AS payment_status,
+					refunded_amount,
+					CASE
+						WHEN pay_method = '1'
+						THEN 'credit_card'
+						WHEN pay_method = '2'
+						THEN 'installment'
+						WHEN pay_method = '3'
+						THEN 'va'
+						WHEN pay_method = '5'
+						THEN 'gopay'
+						WHEN pay_method = '6'
+						THEN 'ewallet'
+						WHEN pay_method = '7'
+						THEN 'INT-JeniusPay'
+						WHEN pay_method = '8'
+						THEN 'INT-linkaja'
+						WHEN pay_method = '9'
+						THEN 'EWT-OVO'
+						WHEN pay_method = '10'
+						THEN 'bcaOneklik'
+						WHEN pay_method = '11'
+						THEN 'multifinance'
+						ELSE pay_method
+					END AS pay_method,
+					created_date AS participation_time
+				FROM
+					fdm.fdm_inapay_promotion_inapay_promotion_record_chain
+				WHERE
+					dp = 'ACTIVE'
+					--AND order_id = '1099383982'
+			)
+			rec
+		ON
+			prm.application_number = rec.promotion_id
+		LEFT JOIN
+			(
+				SELECT
+					ord_id,
+					Parent_ord_id,
+					book_dt,
+					ord_compl_tm,
+					user_pin,
+					CASE
+						WHEN ord_state = 1
+						THEN 'Processing'
+						WHEN ord_state = 6
+						THEN 'Success'
+						WHEN ord_state = 99
+						THEN 'Cancel'
+						ELSE new_ord_flow
+					END ord_state,
+					sku_id,
+					sku_name,
+					brand_name,
+					cat_lvl1_name_en,
+					cat_lvl2_name_en,
+					cat_lvl3_name_en,
+					after_prefr_amt
+				FROM
+					tmp.tmp_ord_ord_det
+				WHERE
+					--book_dt >= '2022-01-01'
+					dt >= '2022-01'
+			)
+			odt
+		ON
+			rec.order_id = odt.Parent_ord_id
+		GROUP BY
+			prm.application_name,
+			application_time,
+			participation_time,
+			rec.order_id,
+			odt.ord_id,
+			rec.pay_method,
+			rec.payment_status,
+		--	prm.bank_name,
+			odt.ord_state,
+			odt.book_dt,
+			ord_compl_tm,
+			odt.user_pin,
+			cat_lvl1_name_en,
+			cat_lvl2_name_en,
+			cat_lvl3_name_en
+	)
+	ord
+LEFT JOIN
+	(
+		SELECT
+			user_pin,
+			CASE
+				WHEN COUNT(DISTINCT parent_ord_id) = 1
+				THEN 'New User'
+				WHEN COUNT(DISTINCT parent_ord_id) > 1
+				THEN 'Exist User'
+			END AS User_flag
+		FROM
+			tmp.tmp_ord_ord_det
+		WHERE
+			ord_state = 6
+			AND dt >= '2020-01'
+		GROUP BY
+			user_pin
+	)
+	usr
+ON
+	ord.user_pin = usr.user_pin
+LEFT JOIN
+(
+		SELECT
+			pp.merchant_order_no AS parent_ord_id,
+			pp.payment_method1,
+			pp.payment_method2,
+			pp.payment_method3
+		FROM
+			(
+				SELECT
+					paynew.merchant_order_no,
+					paydetnew.payment_method1,
+					paydetnew.payment_method2,
+					paydetnew.payment_method3,
+					transaction_amount,
+					paid_amount,
+					refund_amount
+				FROM
+					(
+						SELECT
+							transaction_no,
+							merchant_order_no,
+							transaction_amount,
+							paid_amount,
+							refunded_amount AS refund_amount
+						FROM
+							fdm.fdm_inapay_overseas_payment_transaction_base_chain
+						WHERE
+							dp = "ACTIVE"
+							AND transaction_status = 3 --success
+					)
+					paynew
+				INNER JOIN
+					(
+						SELECT
+							transaction_no,
+							merchant_order_no,
+							payment_method1,
+							payment_method2,
+							payment_method3
+						FROM
+							fdm.fdm_inapay_overseas_payment_payment_detail_chain
+						WHERE
+							dp = "ACTIVE"
+							AND payment_status = 3
+						--	AND payment_method1 <> "PPT"
+					)
+					paydetnew
+				ON
+					paynew.transaction_no = paydetnew.transaction_no
+					AND paynew.merchant_order_no = paydetnew.merchant_order_no
+			)
+			pp
+	)
+	op on op.parent_ord_id = ord.parent_ord_id 
