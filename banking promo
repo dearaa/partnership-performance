@@ -1,0 +1,97 @@
+-- app name
+-- program
+-- Parent ord
+-- Child ord
+-- book dt
+-- User_flag
+-- cat_lvl1_name_en
+-- GMV
+SELECT
+	applicationname,
+	bank,
+	Parent_ord_id,
+	child_ord_id,
+	book_dt,
+	ord_compl_tm,
+	usr.User_flag,
+	ord.cat_lvl1_name_en AS 1st_Category,
+	cat_lvl2_name_en 2nd_category,
+	cat_lvl3_name_en 3rd_category,
+	SUM(ord.after_prefr_amt) amount_to_be_paid
+FROM
+	(
+		SELECT
+			bank.applicationname,
+			bank.ord_id Parent_ord_id,
+			bank.bank,
+			odt.ord_id child_ord_id,
+			odt.book_dt,
+			ord_compl_tm,
+			odt.user_pin,
+			cat_lvl1_name_en,
+			cat_lvl2_name_en,
+			cat_lvl3_name_en,
+			after_prefr_amt
+		FROM
+			(
+				SELECT * FROM dev.promo_banking_aug
+			)
+			bank
+		LEFT JOIN
+			(
+				SELECT
+					ord_id,
+					Parent_ord_id,
+					book_dt,
+					ord_compl_tm,
+					user_pin,
+					sku_id,
+					sku_name,
+					brand_name,
+					cat_lvl1_name_en,
+					cat_lvl2_name_en,
+					cat_lvl3_name_en,
+					after_prefr_amt
+				FROM
+					tmp.tmp_ord_ord_det
+				WHERE
+					--book_dt >= '2022-01-01'
+					dt >= '2022-01'
+			)
+			odt
+		ON
+			bank.ord_id = odt.Parent_ord_id
+	)
+	ord
+LEFT JOIN
+	(
+		SELECT
+			user_pin,
+			CASE
+				WHEN COUNT(DISTINCT parent_ord_id) = 1
+				THEN 'New User'
+				WHEN COUNT(DISTINCT parent_ord_id) > 1
+				THEN 'Exist User'
+			END AS User_flag
+		FROM
+			tmp.tmp_ord_ord_det
+		WHERE
+			ord_state = 6
+			AND dt >= '2020-01'
+		GROUP BY
+			user_pin
+	)
+	usr
+ON
+	ord.user_pin = usr.user_pin
+GROUP BY
+	applicationname,
+	bank,
+	Parent_ord_id,
+	child_ord_id,
+	book_dt,
+	ord_compl_tm,
+	usr.User_flag,
+	ord.cat_lvl1_name_en,
+	cat_lvl2_name_en,
+	cat_lvl3_name_en
