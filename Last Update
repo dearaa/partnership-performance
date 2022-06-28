@@ -35,6 +35,7 @@ FROM
 			rec.order_id Parent_ord_id,
 			odt.ord_id child_ord_id,
 			rec.pay_method,
+			rec.bank_card,
 			rec.payment_status,
 		--	prm.bank_name,
 			odt.ord_state,
@@ -154,6 +155,7 @@ FROM
 						THEN 'multifinance'
 						ELSE pay_method
 					END AS pay_method,
+					bank_card,
 					created_date AS participation_time
 				FROM
 					fdm.fdm_inapay_promotion_inapay_promotion_record_chain
@@ -204,6 +206,7 @@ FROM
 			rec.order_id,
 			odt.ord_id,
 			rec.pay_method,
+			rec.bank_card,
 			rec.payment_status,
 		--	prm.bank_name,
 			odt.ord_state,
